@@ -18,6 +18,7 @@ class FitnessApp:
         self.running = False
         self.current_exercise = "None"
         self.rep_count = 0
+        self.current_image = None  # Critical for preventing blinking
         
         # Create UI elements
         self.create_widgets()
@@ -84,38 +85,36 @@ class FitnessApp:
     
     def process_video(self):
         while self.running:
-            frame, angles = self.camera.get_body_angles()
+            frame, angles = self.camera.get_frame_with_angles()
             
             if frame is not None:
                 # Convert frame for Tkinter
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                img = Image.fromarray(frame)
-                imgtk = ImageTk.PhotoImage(image=img)
+                self.current_image = Image.fromarray(frame)  # Store reference
+                imgtk = ImageTk.PhotoImage(image=self.current_image)
                 
-                # Update video feed
+                # Update video feed (keep reference)
                 self.video_label.imgtk = imgtk
                 self.video_label.configure(image=imgtk)
                 
                 # Process angles if detected
                 if angles:
-                    exercise = self.analyzer.classify_exercise(angles)
-                    feedback = self.analyzer.check_form(exercise, angles)
+                    analysis = self.analyzer.analyze_movement(angles)
+                    self.current_exercise = analysis["exercise"]
+                    self.rep_count = analysis["count"]
                     
                     # Update UI
-                    self.current_exercise = exercise
-                    self.rep_count += 1  # Simple rep counter - improve with exercise-specific logic
-                    
-                    self.exercise_label.config(text=exercise)
+                    self.exercise_label.config(text=self.current_exercise)
                     self.rep_label.config(text=str(self.rep_count))
                     
                     self.feedback_text.config(state=tk.NORMAL)
                     self.feedback_text.delete(1.0, tk.END)
-                    self.feedback_text.insert(tk.END, "\n".join(feedback))
+                    self.feedback_text.insert(tk.END, "\n".join(analysis["feedback"]))
                     self.feedback_text.config(state=tk.DISABLED)
             
-            # Control frame rate
+            # Control frame rate (adjusted for stability)
             self.root.update()
-            cv2.waitKey(30)
+            cv2.waitKey(25)  # Optimal delay for smooth video
         
         # Release camera when stopped
         self.camera.release()
